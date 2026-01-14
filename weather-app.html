@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hava Durumu Pro</title>
+
+    <!-- PWA & Mobile -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="app-icon.png">
+    <link rel="icon" type="image/png" href="app-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hava Durumu">
+    <meta name="theme-color" content="#0f172a">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- Leaflet.js -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .weather-float {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+
+            100% {
+                transform: translateY(0px);
+            }
+        }
+
+        /* Slider Stili */
+        .slider-wind::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #10b981, #34d399);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+            transition: all 0.2s;
+        }
+
+        .slider-wind::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.8);
+        }
+
+        .slider-wind::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #10b981, #34d399);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        /* Leaflet Harita Özelleştirme */
+        .leaflet-container {
+            background: #e8e8e8 !important;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .leaflet-tile-pane {
+            /* Filtre kaldırıldı - doğal renkler */
+        }
+
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        .leaflet-control-zoom a {
+            background: rgba(30, 41, 59, 0.9) !important;
+            color: white !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: rgba(51, 65, 85, 0.9) !important;
+        }
+    </style>
+</head>
+
+<body class="text-white selection:bg-blue-500 selection:text-white">
+
+    <!-- Üst Bar ve Arama (Premium Tasarım) -->
+    <div class="fixed top-0 left-0 right-0 z-50 pointer-events-none">
+        <!-- Blur Arka Plan -->
+        <div
+            class="absolute inset-0 bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-transparent backdrop-blur-md">
+        </div>
+
+        <div class="relative p-4 md:p-6 flex justify-center items-center gap-2">
+            <!-- Arama Input Container -->
+            <div class="w-full max-w-xl relative pointer-events-auto">
+                <div class="relative group">
+                    <!-- Arama İkonu -->
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i
+                            class="ph-duotone ph-magnifying-glass text-xl text-white/50 group-focus-within:text-emerald-400 transition-colors duration-300"></i>
+                    </div>
+
+                    <!-- Input -->
+                    <input type="text" id="cityInput" autocomplete="off" placeholder="Şehir ara..."
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-12 text-base text-white placeholder-white/40 outline-none focus:bg-white/10 focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all duration-300 shadow-lg">
+
+                    <!-- Sağ Taraf: Loader -->
+                    <div id="inputLoader" class="absolute inset-y-0 right-0 pr-4 flex items-center hidden">
+                        <i class="ph ph-spinner animate-spin text-lg text-white/70"></i>
+                    </div>
+                </div>
+
+                <!-- Öneri Listesi -->
+                <ul id="suggestionsList"
+                    class="absolute w-full mt-2 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto z-50">
+                    <!-- JS ile dolacak -->
+                </ul>
+            </div>
+
+            <!-- Favoriler Butonu -->
+            <div class="relative pointer-events-auto">
+                <button onclick="toggleSavedLocations()" id="savedLocationsBtn" title="Favori Konumlar"
+                    class="px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-yellow-500/30 text-white/60 hover:text-yellow-400 transition-all duration-300 shadow-lg flex items-center gap-2">
+                    <i class="ph-fill ph-star text-lg"></i>
+                    <span class="text-sm font-medium hidden sm:inline">Favoriler</span>
+                </button>
+
+                <!-- Kayıtlı Yerler Dropdown -->
+                <div id="savedLocationsDropdown"
+                    class="absolute right-0 mt-2 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden z-50">
+                    <div class="p-3 border-b border-white/10">
+                        <p class="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                            <i class="ph-fill ph-star text-yellow-400"></i> Kayıtlı Yerler
+                        </p>
+                    </div>
+                    <ul id="savedLocationsList" class="max-h-60 overflow-y-auto">
+                        <!-- JS ile dolacak -->
+                    </ul>
+                    <div id="noSavedLocations" class="p-4 text-center text-white/40 text-sm hidden">
+                        <i class="ph-duotone ph-map-pin-line text-2xl mb-2 block"></i>
+                        Henüz kayıtlı yer yok
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ana İçerik -->
+    <main class="container mx-auto px-4 pt-32 pb-12 min-h-screen flex flex-col items-center justify-center">
+
+        <div id="pageLoader"
+            class="fixed inset-0 z-40 bg-slate-900 flex items-center justify-center transition-opacity duration-500">
+            <div class="text-center">
+                <span class="loader mb-4"></span>
+            </div>
+        </div>
+
+        <section id="weatherContent"
+            class="w-full max-w-6xl flex flex-col lg:flex-row gap-8 items-stretch opacity-0 transition-opacity duration-700 delay-200">
+
+            <!-- Sol Taraf: Bugünün Özeti -->
+            <div class="flex-1 flex flex-col self-stretch">
+                <div>
+                    <!-- Şehir Başlık -->
+                    <div class="mb-6 text-center lg:text-left">
+                        <div class="flex items-end justify-center lg:justify-start gap-4">
+                            <h1 id="cityName"
+                                class="text-5xl md:text-7xl font-bold tracking-tight drop-shadow-2xl leading-none">--
+                            </h1>
+                            <button onclick="toggleSaveLocation()" id="saveLocationBtn" title="Favorilere Ekle"
+                                class="w-8 h-8 md:w-10 md:h-10 mb-1 md:mb-2 rounded-full bg-white/10 hover:bg-yellow-500/30 border-2 border-white/20 hover:border-yellow-400 text-white/50 hover:text-yellow-400 transition-all duration-300 flex items-center justify-center hover:scale-110 active:scale-95">
+                                <i id="saveLocationIcon" class="ph ph-star text-lg md:text-xl"></i>
+                            </button>
+                        </div>
+                        <p id="dateText" class="text-xl text-blue-100/80 font-medium tracking-wide mt-2">--</p>
+                    </div>
+
+                    <!-- Ana İkon ve Derece -->
+                    <div class="flex flex-col lg:flex-row items-center gap-8 mb-10">
+                        <i id="mainIcon"
+                            class="ph-duotone ph-cloud-sun text-[150px] md:text-[180px] leading-none text-yellow-400 weather-float drop-shadow-2xl filter"></i>
+
+                        <div class="flex flex-col items-center lg:items-start text-center lg:text-left">
+                            <div class="flex items-start">
+                                <span id="temperature"
+                                    class="text-8xl md:text-9xl font-bold tracking-tighter leading-none">--</span>
+                                <span class="text-5xl mt-4 font-light text-white/60">°</span>
+                            </div>
+                            <p id="weatherDesc"
+                                class="text-xl md:text-2xl mt-4 font-medium text-white/90 bg-white/10 px-6 py-2 rounded-full backdrop-blur-md border border-white/5">
+                                --</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PROFESYONEL DETAY KARTLARI -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+                    <!-- Rüzgar -->
+                    <div
+                        class="glass-card p-5 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all duration-300">
+                        <div
+                            class="absolute -right-4 -bottom-4 text-blue-500/20 group-hover:text-blue-500/30 transition-all transform group-hover:scale-110 group-hover:-rotate-12 duration-500">
+                            <i class="ph-fill ph-wind text-8xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-3 text-blue-200">
+                                <i class="ph-duotone ph-wind text-xl"></i>
+                                <span class="text-xs font-bold uppercase tracking-wider opacity-80">Rüzgar</span>
+                            </div>
+                            <p id="windSpeed" class="text-2xl font-bold tracking-tight">--</p>
+                            <p class="text-xs text-white/40 mt-1">km/saat</p>
+                        </div>
+                    </div>
+
+                    <!-- Nem -->
+                    <div
+                        class="glass-card p-5 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all duration-300">
+                        <div
+                            class="absolute -right-4 -bottom-4 text-indigo-500/20 group-hover:text-indigo-500/30 transition-all transform group-hover:scale-110 group-hover:-rotate-12 duration-500">
+                            <i class="ph-fill ph-drop text-8xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-3 text-indigo-200">
+                                <i class="ph-duotone ph-drop text-xl"></i>
+                                <span class="text-xs font-bold uppercase tracking-wider opacity-80">Nem</span>
+                            </div>
+                            <p id="humidity" class="text-2xl font-bold tracking-tight">--</p>
+                            <p class="text-xs text-white/40 mt-1">Bağıl Oran</p>
+                        </div>
+                    </div>
+
+                    <!-- Hissedilen -->
+                    <div
+                        class="glass-card p-5 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all duration-300">
+                        <div
+                            class="absolute -right-4 -bottom-4 text-orange-500/20 group-hover:text-orange-500/30 transition-all transform group-hover:scale-110 group-hover:-rotate-12 duration-500">
+                            <i class="ph-fill ph-thermometer text-8xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-3 text-orange-200">
+                                <i class="ph-duotone ph-thermometer text-xl"></i>
+                                <span class="text-xs font-bold uppercase tracking-wider opacity-80">Hissedilen</span>
+                            </div>
+                            <p id="feelsLike" class="text-2xl font-bold tracking-tight">--</p>
+                            <p class="text-xs text-white/40 mt-1">Sıcaklık</p>
+                        </div>
+                    </div>
+
+                    <!-- Yağış -->
+                    <div
+                        class="glass-card p-5 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all duration-300">
+                        <div
+                            class="absolute -right-4 -bottom-4 text-teal-500/20 group-hover:text-teal-500/30 transition-all transform group-hover:scale-110 group-hover:-rotate-12 duration-500">
+                            <i class="ph-fill ph-umbrella text-8xl"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-3 text-teal-200">
+                                <i class="ph-duotone ph-umbrella text-xl"></i>
+                                <span class="text-xs font-bold uppercase tracking-wider opacity-80">Yağış</span>
+                            </div>
+                            <p id="precip" class="text-2xl font-bold tracking-tight">--</p>
+                            <p class="text-xs text-white/40 mt-1">Son 24s</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- YENİ PREMIUM KARTLAR -->
+                <div class="mt-4 flex-grow flex flex-col">
+                    <!-- Güneş Kartı (Genişletilmiş) -->
+                    <div
+                        class="glass-card p-5 rounded-2xl relative overflow-hidden group hover:bg-white/10 transition-all duration-300 flex-grow flex flex-col">
+                        <div class="relative z-10">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2 text-yellow-200">
+                                    <i class="ph-duotone ph-sun-horizon text-xl"></i>
+                                    <span class="text-xs font-bold uppercase tracking-wider opacity-80">Güneş
+                                        Pozisyonu</span>
+                                </div>
+                                <!-- Kalan Süre -->
+                                <div
+                                    class="text-xs font-medium bg-gradient-to-r from-yellow-500/10 to-orange-500/10 px-3 py-1.5 rounded-lg text-yellow-100 border border-yellow-500/20 shadow-sm flex items-center gap-2">
+                                    <i class="ph-fill ph-timer text-yellow-400"></i>
+                                    <span id="sunRemainingText" class="opacity-80">Batışa kalan:</span>
+                                    <span id="sunRemainingTime" class="font-bold text-white">-- sa -- dk</span>
+                                </div>
+                            </div>
+
+                            <div class="relative h-24 w-full flex items-end justify-center mb-2 overflow-hidden">
+                                <!-- Yarım Daire Yolu -->
+                                <div
+                                    class="absolute w-64 h-32 border-t-2 border-r-2 border-l-2 border-dashed border-white/20 rounded-t-full top-6">
+                                </div>
+                                <!-- Güneş (Hareketli) -->
+                                <div id="sunMarker"
+                                    class="absolute w-6 h-6 bg-gradient-to-br from-yellow-300 to-orange-500 rounded-full shadow-[0_0_25px_rgba(250,204,21,0.8)] ring-2 ring-white/20 top-[20px]"
+                                    style="left: 0%; transform: translateX(-50%); transition: all 1s ease-out;"></div>
+                                <!-- Ufuk Çizgisi -->
+                                <div class="w-full h-[1px] bg-white/10 absolute bottom-0"></div>
+                            </div>
+
+                            <div class="flex justify-between text-xs font-medium text-white/60 px-4">
+                                <div class="text-center group-hover:scale-105 transition-transform">
+                                    <span
+                                        class="block text-white/40 mb-1 tracking-wider uppercase text-[10px]">Doğuş</span>
+                                    <div class="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-lg">
+                                        <i class="ph-fill ph-arrow-fat-up text-yellow-400"></i>
+                                        <span id="sunriseTime" class="text-sm text-white font-bold">--:--</span>
+                                    </div>
+                                </div>
+                                <div class="text-center group-hover:scale-105 transition-transform">
+                                    <span
+                                        class="block text-white/40 mb-1 tracking-wider uppercase text-[10px]">Batış</span>
+                                    <div class="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-lg">
+                                        <i class="ph-fill ph-arrow-fat-down text-orange-400"></i>
+                                        <span id="sunsetTime" class="text-sm text-white font-bold">--:--</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- UV İndeksi (Basit) -->
+                            <div class="mt-auto pt-4 border-t border-white/10">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <i class="ph-duotone ph-sun text-rose-300 text-lg"></i>
+                                        <span class="text-xs font-bold text-white/60 uppercase tracking-wider">UV
+                                            İndeksi</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span id="uvIndexValue" class="text-2xl font-bold">--</span>
+                                        <span id="uvIndexBadge"
+                                            class="text-[10px] px-2 py-0.5 rounded font-bold bg-green-500/20 text-green-300 border border-green-500/30">Düşük</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sağ Taraf: 7 Günlük Tahmin (GÜNCELLENMİŞ TABLO) -->
+            <div
+                class="w-full lg:w-[500px] glass-card rounded-3xl p-6 lg:p-8 flex flex-col h-full self-stretch mt-8 lg:mt-0 shadow-2xl">
+
+                <!-- Saatlik Tahmin Şeridi (Küçük) -->
+                <div class="mb-6 pb-4 border-b border-white/10">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="ph-duotone ph-clock text-purple-300 text-sm"></i>
+                        <span class="text-xs font-bold text-white/60 uppercase tracking-wider">Saatlik</span>
+                    </div>
+                    <div id="hourlyForecastMobile" class="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                        <!-- JS ile doldurulacak -->
+                    </div>
+                </div>
+
+                <!-- 7 Günlük Başlık -->
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold flex items-center gap-2">
+                        <i class="ph-duotone ph-calendar-blank text-blue-300 text-lg"></i>
+                        7 Günlük
+                    </h3>
+                </div>
+
+                <!-- Liste Başlıkları -->
+                <div class="grid grid-cols-12 gap-2 text-xs text-white/40 font-bold uppercase tracking-wider mb-2 px-2">
+                    <div class="col-span-3">Gün</div>
+                    <div class="col-span-5 text-center">Durum</div>
+                    <div class="col-span-4 text-right">Detaylar</div>
+                </div>
+
+                <div id="forecastList" class="flex flex-col gap-2 flex-grow overflow-y-auto pr-1 custom-scrollbar">
+                    <!-- JS ile doldurulacak -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- RÜZGAR HARİTASI BÖLÜMÜ -->
+        <section id="windMapSection" class="w-full max-w-6xl mt-8 opacity-0 transition-opacity duration-700">
+            <div class="glass-card rounded-3xl p-6 shadow-2xl">
+                <div
+                    class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 pb-4 border-b border-white/10">
+                    <!-- Sol: Başlık ve Mod Seçimi -->
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-lg md:text-xl font-bold flex items-center gap-2">
+                            <div class="bg-emerald-500/20 p-1.5 md:p-2 rounded-lg">
+                                <i class="ph-duotone ph-globe text-emerald-300 text-lg md:text-xl"></i>
+                            </div>
+                            Hava Haritası
+                        </h3>
+                    </div>
+
+                    <!-- Orta: Rüzgar/Yağış Switch -->
+                    <div class="bg-white/5 p-1 rounded-xl flex items-center border border-white/5 w-fit">
+                        <button onclick="setMapMode('wind')" id="btnWindMode"
+                            class="px-2 md:px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shadow-lg transition-all flex items-center gap-1.5">
+                            <i class="ph-bold ph-wind"></i> Rüzgar
+                        </button>
+                        <button onclick="setMapMode('rain')" id="btnRainMode"
+                            class="px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-1.5">
+                            <i class="ph-bold ph-drop"></i> Yağış
+                        </button>
+                    </div>
+
+                    <!-- Sağ: Hız Bilgisi -->
+                    <div class="flex items-center gap-2 md:gap-3">
+                        <div class="text-right hidden md:block">
+                            <p id="windDayLabel" class="text-sm font-bold text-white">Bugün</p>
+                            <p id="windTimeLabel" class="text-xs text-white/60">Şimdi</p>
+                        </div>
+                        <span id="windSpeedLabel"
+                            class="text-[10px] md:text-xs px-2 md:px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full font-bold">--
+                            km/s</span>
+                    </div>
+                </div>
+
+                <!-- Zaman Slider (7 Günlük) -->
+                <div class="mb-4 px-2 relative">
+                    <!-- Slider Üstü Tooltip -->
+                    <div class="relative h-8 mb-2">
+                        <div id="sliderTooltip"
+                            class="absolute transform -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg transition-all duration-100"
+                            style="left: 0%;">
+                            <span id="tooltipDay">Bugün</span> <span id="tooltipTime">Şimdi</span>
+                            <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full">
+                                <div
+                                    class="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-emerald-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="range" id="windTimeSlider" min="0" max="167" value="0"
+                        class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-wind">
+                    <div id="sliderDayLabels" class="flex justify-between text-xs text-white/40 mt-2">
+                        <!-- JS ile doldurulacak -->
+                    </div>
+                </div>
+
+                <!-- Harita Container -->
+                <div class="rounded-2xl overflow-hidden border border-white/10 relative" id="windMapContainer">
+                    <div id="windMap" style="height: 400px; width: 100%;"></div>
+
+                    <!-- Rüzgar Animasyonu Canvas -->
+                    <canvas id="windCanvas" class="absolute inset-0 pointer-events-none z-[500]"
+                        style="width: 100%; height: 400px;"></canvas>
+
+                    <!-- Ortada Sabit + İkonu -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-[1000]">
+                        <div class="text-4xl font-light text-emerald-400 drop-shadow-lg select-none">
+                            <i class="ph-bold ph-plus"></i>
+                        </div>
+                    </div>
+
+                    <!-- Sağ Üstte Rüzgar Bilgi Kartı (Mobilde Küçük) -->
+                    <div
+                        class="absolute top-2 right-2 md:top-3 md:right-3 bg-slate-900/90 backdrop-blur-md px-2 py-1.5 md:px-4 md:py-3 rounded-lg md:rounded-xl border border-white/20 shadow-xl z-[1000]">
+                        <div class="flex items-center gap-2 md:gap-3">
+                            <div class="bg-emerald-500/20 p-1.5 md:p-2 rounded-md md:rounded-lg">
+                                <i class="ph-duotone ph-wind text-emerald-400 text-base md:text-xl"></i>
+                            </div>
+                            <div>
+                                <p id="crosshairSpeed" class="text-sm md:text-xl font-bold text-white">-- km/s</p>
+                                <p id="crosshairDirection" class="text-[10px] md:text-xs text-white/60">--°</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Koordinat Göstergesi -->
+                    <div
+                        class="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg text-xs text-white/70 z-[1000]">
+                        <span id="crosshairCoords">41.01°N, 28.95°E</span>
+                    </div>
+
+                    <!-- Yükleniyor Göstergesi -->
+                    <div id="windLoading"
+                        class="absolute inset-0 bg-slate-900/60 flex items-center justify-center z-[999] hidden">
+                        <i class="ph ph-spinner animate-spin text-3xl text-emerald-400"></i>
+                    </div>
+                </div>
+
+                <!-- Kullanım İpucu -->
+                <p class="text-center text-xs text-white/40 mt-4">
+                    <i class="ph-duotone ph-cursor-click"></i>
+                    Haritayı sürükleyerek farklı konumların rüzgar verisini görün
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const weatherConfigs = {
+            0: { desc: "Açık", icon: "ph-sun", color: "text-yellow-400" },
+            1: { desc: "Az Bulutlu", icon: "ph-cloud-sun", color: "text-yellow-200" },
+            2: { desc: "Parçalı Bulutlu", icon: "ph-cloud", color: "text-gray-200" },
+            3: { desc: "Kapalı", icon: "ph-cloud", color: "text-gray-400" },
+            45: { desc: "Sisli", icon: "ph-waves", color: "text-gray-300" },
+            48: { desc: "Kırağı", icon: "ph-snowflake", color: "text-blue-100" },
+            51: { desc: "Hafif Çiseleme", icon: "ph-cloud-drizzle", color: "text-blue-300" },
+            53: { desc: "Çiseleme", icon: "ph-cloud-drizzle", color: "text-blue-300" },
+            55: { desc: "Yoğun Çiseleme", icon: "ph-cloud-rain", color: "text-blue-400" },
+            56: { desc: "Dondurucu Çiseleme", icon: "ph-cloud-drizzle", color: "text-cyan-300" },
+            57: { desc: "Yoğun Dondurucu Çiseleme", icon: "ph-cloud-drizzle", color: "text-cyan-400" },
+            61: { desc: "Hafif Yağmur", icon: "ph-cloud-rain", color: "text-blue-400" },
+            63: { desc: "Yağmur", icon: "ph-cloud-rain", color: "text-blue-500" },
+            65: { desc: "Şiddetli Yağmur", icon: "ph-cloud-rain", color: "text-blue-600" },
+            66: { desc: "Dondurucu Yağmur", icon: "ph-cloud-rain", color: "text-cyan-400" },
+            67: { desc: "Yoğun Dondurucu Yağmur", icon: "ph-cloud-rain", color: "text-cyan-500" },
+            71: { desc: "Hafif Kar", icon: "ph-snowflake", color: "text-white" },
+            73: { desc: "Kar Yağışlı", icon: "ph-snowflake", color: "text-white" },
+            75: { desc: "Yoğun Kar", icon: "ph-snowflake", color: "text-white" },
+            77: { desc: "Kar Taneleri", icon: "ph-snowflake", color: "text-blue-100" },
+            80: { desc: "Hafif Sağanak", icon: "ph-cloud-rain", color: "text-blue-400" },
+            81: { desc: "Sağanak Yağmur", icon: "ph-cloud-rain", color: "text-blue-500" },
+            82: { desc: "Şiddetli Sağanak", icon: "ph-cloud-rain", color: "text-blue-600" },
+            85: { desc: "Hafif Kar Sağanağı", icon: "ph-snowflake", color: "text-white" },
+            86: { desc: "Yoğun Kar Sağanağı", icon: "ph-snowflake", color: "text-blue-100" },
+            95: { desc: "Fırtına", icon: "ph-lightning", color: "text-yellow-400" },
+            96: { desc: "Dolu Fırtınası", icon: "ph-cloud-lightning", color: "text-yellow-300" },
+            99: { desc: "Şiddetli Dolu", icon: "ph-cloud-lightning", color: "text-red-400" }
+        };
+
+        const cityInput = document.getElementById('cityInput');
+        const suggestionsList = document.getElementById('suggestionsList');
+        const inputLoader = document.getElementById('inputLoader');
+        const pageLoader = document.getElementById('pageLoader');
+        const weatherContent = document.getElementById('weatherContent');
+
+        let debounceTimer;
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+        }
+
+        function getDayName(dateString) {
+            const date = new Date(dateString);
+            return new Intl.DateTimeFormat('tr-TR', { weekday: 'long' }).format(date);
+        }
+
+        function getCodeInfo(code) {
+            return weatherConfigs[code] || { desc: "Bilinmiyor", icon: "ph-question", color: "text-gray-200" };
+        }
+
+        // --- Autocomplete ---
+        cityInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(debounceTimer);
+            suggestionsList.classList.add('hidden');
+
+            if (query.length < 2) return;
+
+            inputLoader.classList.remove('hidden');
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${query}&count=5&language=tr&format=json`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    renderSuggestions(data.results || []);
+                } catch (err) {
+                    console.error(err);
+                } finally {
+                    inputLoader.classList.add('hidden');
+                }
+            }, 300);
+        });
+
+        function renderSuggestions(results) {
+            suggestionsList.innerHTML = '';
+            if (results.length === 0) return;
+
+            results.forEach(city => {
+                const li = document.createElement('li');
+                li.className = "px-6 py-4 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0 transition-colors flex items-center justify-between group";
+
+                li.innerHTML = `
+                    <div>
+                        <span class="font-semibold text-white block group-hover:text-blue-300 transition-colors">${city.name}</span>
+                        <span class="text-xs text-white/50 block mt-1">${city.admin1 || ''} ${city.country ? ', ' + city.country : ''}</span>
+                    </div>
+                    <i class="ph-bold ph-arrow-right text-white/30 group-hover:text-white transition-colors"></i>
+                `;
+
+                li.addEventListener('click', () => {
+                    cityInput.value = city.name;
+                    suggestionsList.classList.add('hidden');
+                    fetchWeather(city.latitude, city.longitude, city.name, city.country);
+                });
+                suggestionsList.appendChild(li);
+            });
+            suggestionsList.classList.remove('hidden');
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!cityInput.contains(e.target) && !suggestionsList.contains(e.target)) {
+                suggestionsList.classList.add('hidden');
+            }
+        });
+
+        // --- Hava Durumu ---
+        async function fetchWeather(lat, lon, cityName, country) {
+            pageLoader.classList.remove('hidden', 'opacity-0');
+            weatherContent.classList.add('opacity-0');
+
+            // Mevcut konumu güncelle
+            currentLocation = { lat, lon, name: cityName, country };
+
+            try {
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,uv_index_max&timezone=auto`;
+
+                const res = await fetch(weatherUrl);
+                const data = await res.json();
+
+                updateUI(cityName, country, data);
+
+                // Kaydet butonunu güncelle
+                updateSaveButton();
+
+                // Rüzgar haritasını başlat/güncelle
+                initWindMap(lat, lon, data.hourly, data.current);
+
+                setTimeout(() => {
+                    pageLoader.classList.add('opacity-0');
+                    setTimeout(() => pageLoader.classList.add('hidden'), 500);
+                    weatherContent.classList.remove('opacity-0');
+                    document.getElementById('windMapSection').classList.remove('opacity-0');
+                }, 500);
+
+            } catch (error) {
+                console.error(error);
+                alert("Veri alınamadı.");
+                pageLoader.classList.add('hidden');
+            }
+        }
+
+        function updateUI(cityName, country, data) {
+            const current = data.current;
+            const daily = data.daily;
+            const info = getCodeInfo(current.weather_code);
+
+            // Ana Bölüm
+            document.getElementById('cityName').textContent = cityName;
+            document.getElementById('dateText').textContent = formatDate(new Date());
+            document.getElementById('temperature').textContent = Math.round(current.temperature_2m);
+            document.getElementById('weatherDesc').textContent = info.desc;
+
+            document.getElementById('windSpeed').textContent = current.wind_speed_10m;
+            document.getElementById('humidity').textContent = `%${current.relative_humidity_2m}`;
+            document.getElementById('feelsLike').textContent = `${Math.round(current.apparent_temperature)}°`;
+            document.getElementById('precip').textContent = `${current.precipitation} mm`;
+
+            // --- YENİ KARTLAR GÜNCELLEME ---
+
+            // 1. Güneş Pozisyonu
+            if (daily.sunrise && daily.sunset) {
+                const sunrise = new Date(daily.sunrise[0]);
+                const sunset = new Date(daily.sunset[0]);
+
+                // Saatleri yaz
+                const fmtTime = (date) => `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                document.getElementById('sunriseTime').textContent = fmtTime(sunrise);
+                document.getElementById('sunsetTime').textContent = fmtTime(sunset);
+
+                // Pozisyon hesapla
+                const now = new Date();
+                let sunPercent = 0;
+
+                if (now < sunrise) sunPercent = 0;
+                else if (now > sunset) sunPercent = 100;
+                else {
+                    const totalMinutes = (sunset - sunrise) / 1000 / 60;
+                    const elapsedMinutes = (now - sunrise) / 1000 / 60;
+                    sunPercent = (elapsedMinutes / totalMinutes) * 100;
+                }
+
+                const sunMarker = document.getElementById('sunMarker');
+                sunMarker.style.left = `${sunPercent}%`;
+
+                // Animasyon yüksekliği (HTML'de genişlik arttı)
+                const rad = (sunPercent / 100) * Math.PI;
+                const bottomPx = Math.sin(rad) * 85;
+                sunMarker.style.top = 'auto';
+                sunMarker.style.bottom = `${bottomPx}px`;
+
+                // Kalan süre hesabı
+                const timeLeftVal = document.getElementById('sunRemainingTime');
+                const timeLeftText = document.getElementById('sunRemainingText');
+
+                if (now < sunrise) {
+                    timeLeftText.textContent = "Doğuşa:";
+                    const diff = sunrise - now;
+                    const h = Math.floor(diff / (1000 * 60 * 60));
+                    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    timeLeftVal.textContent = `${h}sa ${m}dk`;
+                } else if (now < sunset) {
+                    timeLeftText.textContent = "Batışa:";
+                    const diff = sunset - now;
+                    const h = Math.floor(diff / (1000 * 60 * 60));
+                    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    timeLeftVal.textContent = `${h}sa ${m}dk`;
+                } else {
+                    timeLeftText.textContent = "Durum:";
+                    timeLeftVal.textContent = "Battı";
+                }
+            }
+
+            // --- UV İNDEKSİ (Basit) ---
+            if (daily.uv_index_max) {
+                const uv = Math.round(daily.uv_index_max[0]);
+                document.getElementById('uvIndexValue').textContent = uv;
+
+                const uvBadge = document.getElementById('uvIndexBadge');
+                if (uv <= 2) {
+                    uvBadge.textContent = 'Düşük';
+                    uvBadge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-green-500/20 text-green-300 border border-green-500/30';
+                } else if (uv <= 5) {
+                    uvBadge.textContent = 'Orta';
+                    uvBadge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30';
+                } else if (uv <= 7) {
+                    uvBadge.textContent = 'Yüksek';
+                    uvBadge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30';
+                } else {
+                    uvBadge.textContent = 'Çok Yüksek';
+                    uvBadge.className = 'text-[10px] px-2 py-0.5 rounded font-bold bg-red-500/20 text-red-300 border border-red-500/30';
+                }
+            }
+
+            // --- SAATLİK TAHMİN ŞERİDİ ---
+            if (data.hourly && data.hourly.temperature_2m && data.hourly.weather_code) {
+                const hourlyContainer = document.getElementById('hourlyForecastMobile');
+                if (hourlyContainer) {
+                    hourlyContainer.innerHTML = '';
+
+                    const currentHour = new Date().getHours();
+
+                    // Önümüzdeki 24 saati göster
+                    for (let i = 0; i < 24; i++) {
+                        const hourIndex = currentHour + i;
+                        if (hourIndex >= data.hourly.time.length) break;
+
+                        const temp = Math.round(data.hourly.temperature_2m[hourIndex]);
+                        const code = data.hourly.weather_code[hourIndex];
+                        const hourInfo = getCodeInfo(code);
+
+                        const hourTime = new Date(data.hourly.time[hourIndex]);
+                        const hourLabel = i === 0 ? 'Şimdi' : `${hourTime.getHours().toString().padStart(2, '0')}:00`;
+
+                        const item = document.createElement('div');
+                        item.className = `flex flex-col items-center gap-1.5 min-w-[60px] p-3 rounded-xl ${i === 0 ? 'bg-white/10 border border-white/10' : 'bg-white/5'} transition-all hover:bg-white/10`;
+
+                        item.innerHTML = `
+                            <span class="text-[10px] font-medium ${i === 0 ? 'text-emerald-300' : 'text-white/50'}">${hourLabel}</span>
+                            <i class="ph-duotone ${hourInfo.icon} text-xl ${hourInfo.color}"></i>
+                            <span class="text-sm font-bold">${temp}°</span>
+                        `;
+
+                        hourlyContainer.appendChild(item);
+                    }
+                }
+            }
+
+            const mainIcon = document.getElementById('mainIcon');
+            mainIcon.className = `ph-duotone ${info.icon} text-[150px] md:text-[180px] leading-none ${info.color} weather-float drop-shadow-2xl`;
+
+            // 7 Günlük Tahmin Listesi (GRID YAPISI İLE HİZALAMA)
+            const listContainer = document.getElementById('forecastList');
+            listContainer.innerHTML = '';
+
+            for (let i = 0; i < 7; i++) {
+                const dayInfo = getCodeInfo(daily.weather_code[i]);
+                const maxTemp = Math.round(daily.temperature_2m_max[i]);
+                const minTemp = Math.round(daily.temperature_2m_min[i]);
+                const windMax = Math.round(daily.wind_speed_10m_max[i]);
+                const precipProb = daily.precipitation_probability_max[i];
+                const isToday = i === 0;
+
+                const row = document.createElement('div');
+
+                // Grid Yapısı: 12 sütunlu grid sistemi kullanıldı
+                // Sütun 1-3: Gün
+                // Sütun 4-8: İkon + Durum Açıklaması (Ortalı)
+                // Sütun 9-12: Sıcaklık ve Ekstra (Sağa dayalı)
+
+                row.className = `grid grid-cols-12 items-center gap-2 p-3 rounded-xl hover:bg-white/10 transition-all cursor-default border border-transparent ${isToday ? 'bg-white/10 border-white/10 ring-1 ring-white/5' : ''}`;
+
+                row.innerHTML = `
+                    <!-- 1. Gün Adı -->
+                    <div class="col-span-3 flex flex-col justify-center">
+                        <span class="font-bold text-sm truncate">${isToday ? 'Bugün' : getDayName(daily.time[i])}</span>
+                        <span class="text-[10px] opacity-50 font-medium">${isToday ? 'Şimdi' : new Date(daily.time[i]).getDate()}</span>
+                    </div>
+
+                    <!-- 2. İkon ve Durum -->
+                    <div class="col-span-5 flex flex-col items-center justify-center text-center">
+                        <i class="ph-duotone ${dayInfo.icon} text-2xl ${dayInfo.color} mb-1 drop-shadow-md"></i>
+                        <span class="text-[10px] md:text-xs text-white/80 font-medium truncate w-full px-1">${dayInfo.desc}</span>
+                    </div>
+
+                    <!-- 3. Değerler -->
+                    <div class="col-span-4 flex flex-col items-end justify-center gap-1">
+                        <!-- Derece -->
+                        <div class="text-sm font-bold flex gap-1 items-baseline">
+                            ${maxTemp}° <span class="text-white/40 font-normal text-xs">/ ${minTemp}°</span>
+                        </div>
+                        
+                        <!-- Alt Bilgi (Rüzgar & Yağış) -->
+                        <div class="flex items-center gap-3 text-[10px] opacity-70">
+                            <div class="flex items-center gap-1" title="Rüzgar">
+                                <i class="ph-fill ph-wind"></i> ${windMax}
+                            </div>
+                            <div class="flex items-center gap-1 ${precipProb > 30 ? 'text-blue-300 font-bold' : ''}" title="Yağış">
+                                <i class="ph-fill ph-drop"></i> %${precipProb}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                listContainer.appendChild(row);
+            }
+        }
+
+        // --- RÜZGAR HARİTASI ---
+        let windMap = null;
+        let currentSliderValue = 0;
+        let fetchTimeout = null;
+
+        function initWindMap(lat, lon, hourlyData, currentData) {
+            // Harita zaten varsa, sadece konumu güncelle
+            if (windMap) {
+                windMap.setView([lat, lon], 9);
+                fetchWindDataForCenter();
+            } else {
+                // Yeni harita oluştur
+                windMap = L.map('windMap', {
+                    zoomControl: true,
+                    attributionControl: false
+                }).setView([lat, lon], 9);
+
+                // OpenStreetMap - Açık tema
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19
+                }).addTo(windMap);
+
+                // Slider event listener
+                document.getElementById('windTimeSlider').addEventListener('input', (e) => {
+                    currentSliderValue = parseInt(e.target.value);
+                    updateTimeLabel(currentSliderValue);
+                    fetchWindDataForCenter();
+                });
+
+                // Harita hareket ettiğinde (sürükleme/zoom bitince)
+                windMap.on('moveend', () => {
+                    fetchWindDataForCenter();
+                });
+
+                // Harita hareket ederken koordinatları güncelle
+                windMap.on('move', () => {
+                    updateCoordsDisplay();
+                });
+            }
+
+            // Slider gün etiketlerini oluştur
+            createSliderLabels();
+
+            // İlk veriyi çek
+            fetchWindDataForCenter();
+        }
+
+        function createSliderLabels() {
+            const container = document.getElementById('sliderDayLabels');
+            container.innerHTML = '';
+
+            const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+            const today = new Date();
+
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(today);
+                date.setDate(date.getDate() + i);
+
+                const span = document.createElement('span');
+                if (i === 0) {
+                    span.textContent = 'Bugün';
+                    span.className = 'text-emerald-400 font-medium';
+                } else if (i === 1) {
+                    span.textContent = 'Yarın';
+                } else {
+                    span.textContent = dayNames[date.getDay()];
+                }
+                container.appendChild(span);
+            }
+        }
+
+        function updateCoordsDisplay() {
+            const center = windMap.getCenter();
+            const lat = center.lat.toFixed(2);
+            const lon = center.lng.toFixed(2);
+            const latDir = center.lat >= 0 ? 'N' : 'S';
+            const lonDir = center.lng >= 0 ? 'E' : 'W';
+            document.getElementById('crosshairCoords').textContent = `${Math.abs(lat)}°${latDir}, ${Math.abs(lon)}°${lonDir}`;
+        }
+
+        function updateTimeLabel(hourIndex) {
+            const timeLabel = document.getElementById('windTimeLabel');
+            const dayLabel = document.getElementById('windDayLabel');
+
+            const futureTime = new Date();
+            futureTime.setHours(futureTime.getHours() + hourIndex);
+
+            // Saat bilgisi
+            if (hourIndex === 0) {
+                timeLabel.textContent = 'Şimdi';
+            } else {
+                timeLabel.textContent = `${futureTime.getHours().toString().padStart(2, '0')}:00`;
+            }
+
+            // Gün bilgisi
+            const today = new Date();
+            const diffDays = Math.floor((futureTime - today) / (1000 * 60 * 60 * 24));
+            const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+            if (diffDays === 0 && futureTime.getDate() === today.getDate()) {
+                dayLabel.textContent = 'Bugün';
+            } else if (diffDays === 0 || diffDays === 1) {
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                if (futureTime.getDate() === tomorrow.getDate()) {
+                    dayLabel.textContent = 'Yarın';
+                } else {
+                    dayLabel.textContent = dayNames[futureTime.getDay()];
+                }
+            } else {
+                dayLabel.textContent = dayNames[futureTime.getDay()];
+            }
+
+            // Slider Tooltip Güncelle
+            const slider = document.getElementById('windTimeSlider');
+            const tooltip = document.getElementById('sliderTooltip');
+            const tooltipDay = document.getElementById('tooltipDay');
+            const tooltipTime = document.getElementById('tooltipTime');
+
+            // Tooltip pozisyonunu hesapla
+            const percent = (hourIndex / 167) * 100;
+            tooltip.style.left = `calc(${percent}% + ${(50 - percent) * 0.18}px)`;
+
+            // Tooltip içeriğini güncelle
+            tooltipDay.textContent = dayLabel.textContent;
+            tooltipTime.textContent = timeLabel.textContent;
+        }
+
+        async function fetchWindDataForCenter() {
+            // Debounce - çok hızlı istek atmayı önle
+            if (fetchTimeout) clearTimeout(fetchTimeout);
+
+            fetchTimeout = setTimeout(async () => {
+                const center = windMap.getCenter();
+                const lat = center.lat;
+                const lon = center.lng;
+
+                // Loading göster
+                document.getElementById('windLoading').classList.remove('hidden');
+
+                try {
+                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,precipitation,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+
+                    if (data.hourly) {
+                        const currentHour = new Date().getHours();
+                        const targetHour = currentHour + currentSliderValue;
+
+                        const speed = data.hourly.wind_speed_10m[targetHour] || 0;
+                        const direction = data.hourly.wind_direction_10m[targetHour] || 0;
+                        const precip = data.hourly.precipitation[targetHour] || 0;
+                        const wCode = data.hourly.weather_code[targetHour] || 0;
+
+                        updateWindUI(speed, direction, precip, wCode);
+                    }
+                } catch (err) {
+                    console.error('Rüzgar verisi alınamadı:', err);
+                    updateWindUI(0, 0, 0, 0);
+                } finally {
+                    document.getElementById('windLoading').classList.add('hidden');
+                }
+            }, 300);
+        }
+
+        let currentMapMode = 'wind';
+        let currentPrecip = 0;
+        let currentWeatherCode = 0;
+
+        function updateWindUI(speed, direction, precip = 0, wCode = 0) {
+            currentWindSpeed = speed;
+            currentWindDirection = direction;
+            currentPrecip = precip;
+            currentWeatherCode = wCode;
+
+            if (currentMapMode === 'wind') {
+                // Rüzgar Modu
+                document.getElementById('crosshairSpeed').textContent = `${Math.round(speed)} km/s`;
+                document.getElementById('crosshairDirection').textContent = `${Math.round(direction)}° ${getWindDirectionName(direction)}`;
+                document.getElementById('windSpeedLabel').textContent = `${Math.round(speed)} km/s`;
+
+                // Rüzgar animasyonunu güncelle
+                updateWindAnimation(speed, direction);
+            } else {
+                // Yağış Modu
+                document.getElementById('crosshairSpeed').textContent = `${precip} mm`;
+
+                let statusText = 'Yağışsız';
+                // Mevcut ikonu bul (wind, drop veya snowflake olabilir)
+                const icon = document.querySelector('#windMapSection i[class*="ph-"]');
+
+                if (icon) {
+                    if (precip > 0) {
+                        const isSnow = [71, 73, 75, 77, 85, 86].includes(wCode);
+                        if (isSnow) {
+                            statusText = 'Kar Yağışlı';
+                            icon.className = 'ph-duotone ph-snowflake text-white text-xl';
+                            icon.parentElement.className = 'bg-blue-500/20 p-2 rounded-lg';
+                        } else {
+                            statusText = 'Yağmurlu';
+                            icon.className = 'ph-duotone ph-drop text-blue-400 text-xl';
+                            icon.parentElement.className = 'bg-blue-500/20 p-2 rounded-lg';
+                        }
+                    } else {
+                        statusText = 'Yağışsız';
+                        icon.className = 'ph-duotone ph-drop text-white/50 text-xl';
+                        icon.parentElement.className = 'bg-white/5 p-2 rounded-lg';
+                    }
+                }
+
+                document.getElementById('crosshairDirection').textContent = statusText;
+                document.getElementById('windSpeedLabel').textContent = `${precip} mm`;
+
+                updateRainAnimation(precip);
+            }
+        }
+
+        function setMapMode(mode) {
+            currentMapMode = mode;
+
+            // Buton stilleri
+            const btnWind = document.getElementById('btnWindMode');
+            const btnRain = document.getElementById('btnRainMode');
+
+            if (mode === 'wind') {
+                btnWind.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shadow-lg transition-all flex items-center gap-2';
+                btnRain.className = 'px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-2';
+
+                // İkonları eski haline getir
+                const iconContainer = document.querySelector('#windMapSection .ph-wind, #windMapSection .ph-drop').parentElement;
+
+                // Yeniden veri ile güncelle (Animasyonu tetiklemek için)
+                fetchWindDataForCenter();
+            } else {
+                btnWind.className = 'px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-2';
+                btnRain.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-500 text-white shadow-lg transition-all flex items-center gap-2';
+
+                fetchWindDataForCenter();
+            }
+        }
+
+        // --- YAĞMUR ANİMASYONU ---
+        function updateRainAnimation(precip) {
+            // Eğer rüzgar animasyonu çalışıyorsa durdurmuyoruz ama draw fonksiyonu içinde kontrol edeceğiz veya burada switch edeceğiz.
+            // En temizi: startWindAnimation içindeki döngüyü modifiye etmek.
+
+            // Canvas'ı temizle ve yeniden boyutlandır
+            const canvas = document.getElementById('windCanvas');
+            const container = document.getElementById('windMapContainer');
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+
+            // Parçacıkları yağmur için ayarla
+            if (windParticles.length === 0) {
+                initParticles(canvas.width, canvas.height);
+                startWindAnimation(); // Tek bir animasyon döngüsü kullanıyoruz
+            }
+        }
+
+        function getWindDirectionName(deg) {
+            const directions = ['K', 'KD', 'D', 'GD', 'G', 'GB', 'B', 'KB'];
+            const index = Math.round(deg / 45) % 8;
+            return directions[index];
+        }
+
+        // --- RÜZGAR ANİMASYONU (Windy Tarzı) ---
+        let windParticles = [];
+        let windAnimationId = null;
+        let currentWindSpeed = 0;
+        let currentWindDirection = 0;
+        const PARTICLE_COUNT = 150;
+
+        function updateWindAnimation(speed, direction) {
+            currentWindSpeed = speed;
+            currentWindDirection = direction;
+
+            // Canvas'ı ayarla
+            const canvas = document.getElementById('windCanvas');
+            const container = document.getElementById('windMapContainer');
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+
+            // Parçacıkları başlat/yeniden oluştur
+            if (windParticles.length === 0) {
+                initParticles(canvas.width, canvas.height);
+                startWindAnimation();
+            }
+        }
+
+        function initParticles(width, height) {
+            windParticles = [];
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                windParticles.push(createParticle(width, height));
+            }
+        }
+
+        function createParticle(width, height) {
+            // Her zaman haritanın rastgele bir yerinden başlat
+            return {
+                x: Math.random() * width,
+                y: Math.random() * height,
+                age: Math.random() * 60,
+                maxAge: 60 + Math.random() * 40,
+                trail: []
+            };
+        }
+
+        function startWindAnimation() {
+            if (windAnimationId) return;
+
+            const canvas = document.getElementById('windCanvas');
+            const ctx = canvas.getContext('2d');
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (currentMapMode === 'wind') {
+                    // --- RÜZGAR MODU ---
+                    const rad = (currentWindDirection + 180) * Math.PI / 180;
+                    const speedFactor = Math.max(currentWindSpeed / 10, 0.5);
+
+                    let color;
+                    if (currentWindSpeed < 10) color = { r: 74, g: 222, b: 128 };
+                    else if (currentWindSpeed < 25) color = { r: 250, g: 204, b: 21 };
+                    else if (currentWindSpeed < 40) color = { r: 251, g: 146, b: 60 };
+                    else color = { r: 239, g: 68, b: 68 };
+
+                    windParticles.forEach((p, index) => {
+                        const vx = Math.sin(rad) * speedFactor * 2;
+                        const vy = -Math.cos(rad) * speedFactor * 2;
+                        p.x += vx;
+                        p.y += vy;
+                        p.age++;
+
+                        p.trail.push({ x: p.x, y: p.y });
+                        if (p.trail.length > 8) p.trail.shift();
+
+                        if (p.trail.length > 1) {
+                            ctx.beginPath();
+                            ctx.moveTo(p.trail[0].x, p.trail[0].y);
+                            for (let i = 1; i < p.trail.length; i++) ctx.lineTo(p.trail[i].x, p.trail[i].y);
+
+                            const lifeRatio = 1 - (p.age / p.maxAge);
+                            const alpha = Math.min(lifeRatio, 0.7);
+                            ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+                            ctx.lineWidth = 1.5;
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+
+                            if (p.trail.length >= 2) {
+                                const lastPoint = p.trail[p.trail.length - 1];
+                                const prevPoint = p.trail[p.trail.length - 2];
+                                const angle = Math.atan2(lastPoint.y - prevPoint.y, lastPoint.x - prevPoint.x);
+                                ctx.beginPath();
+                                ctx.moveTo(lastPoint.x, lastPoint.y);
+                                ctx.lineTo(lastPoint.x - 5 * Math.cos(angle - Math.PI / 6), lastPoint.y - 5 * Math.sin(angle - Math.PI / 6));
+                                ctx.moveTo(lastPoint.x, lastPoint.y);
+                                ctx.lineTo(lastPoint.x - 5 * Math.cos(angle + Math.PI / 6), lastPoint.y - 5 * Math.sin(angle + Math.PI / 6));
+                                ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+                                ctx.lineWidth = 1.5;
+                                ctx.stroke();
+                            }
+                        }
+
+                        if (p.age > p.maxAge || p.x < -20 || p.x > canvas.width + 20 || p.y < -20 || p.y > canvas.height + 20) {
+                            windParticles[index] = createParticle(canvas.width, canvas.height);
+                        }
+                    });
+                } else {
+                    // --- YAĞIŞ MODU ---
+                    // --- YAĞIŞ MODU (Gelişmiş) ---
+
+                    if (currentPrecip <= 0) {
+                        windAnimationId = requestAnimationFrame(animate);
+                        return;
+                    }
+
+                    const isSnow = [71, 73, 75, 77, 85, 86].includes(currentWeatherCode);
+
+                    if (isSnow) {
+                        // KAR MODU
+                        const speed = 1 + (currentPrecip * 0.5);
+
+                        windParticles.forEach((p, index) => {
+                            p.y += speed;
+                            p.x += Math.sin(p.age * 0.02) * 0.5;
+                            p.age++;
+
+                            if (p.y > canvas.height) {
+                                p.y = -5;
+                                p.x = Math.random() * canvas.width;
+                            }
+
+                            ctx.beginPath();
+                            ctx.arc(p.x, p.y, Math.random() * 2 + 1, 0, Math.PI * 2);
+                            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
+                            ctx.fill();
+                        });
+                    } else {
+                        // YAĞMUR MODU
+                        const speed = Math.min(Math.max(10, currentPrecip * 8), 35);
+                        const length = Math.min(Math.max(10, currentPrecip * 15), 50);
+                        const color = { r: 147, g: 197, b: 253 };
+
+                        windParticles.forEach((p, index) => {
+                            p.y += speed;
+                            if (p.y > canvas.height) {
+                                p.y = -length;
+                                p.x = Math.random() * canvas.width;
+                            }
+
+                            ctx.beginPath();
+                            ctx.moveTo(p.x, p.y);
+                            ctx.lineTo(p.x, p.y - length);
+
+                            const alpha = Math.min(0.2 + (currentPrecip * 0.15), 0.8);
+                            ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+                            ctx.lineWidth = currentPrecip > 5 ? 2 : 1.5;
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+                        });
+                    }
+                }
+
+                windAnimationId = requestAnimationFrame(animate);
+            }
+
+            animate();
+        }
+
+        // Pencere boyutu değişince canvas'ı güncelle
+        window.addEventListener('resize', () => {
+            const canvas = document.getElementById('windCanvas');
+            const container = document.getElementById('windMapContainer');
+            if (container) {
+                canvas.width = container.offsetWidth;
+                canvas.height = container.offsetHeight;
+                windParticles = [];
+                initParticles(canvas.width, canvas.height);
+            }
+        });
+
+        // --- KAYITLI YERLER SİSTEMİ ---
+        let currentLocation = null; // { lat, lon, name, country }
+
+        function getSavedLocations() {
+            const saved = localStorage.getItem('savedLocations');
+            return saved ? JSON.parse(saved) : [];
+        }
+
+        function saveLocationToStorage(location) {
+            const locations = getSavedLocations();
+            // Aynı yer varsa ekleme
+            if (locations.some(loc => loc.name === location.name)) return false;
+            // Maksimum 5 yer
+            if (locations.length >= 5) {
+                locations.pop(); // Son elemanı çıkar
+            }
+            locations.unshift(location); // Başa ekle
+            localStorage.setItem('savedLocations', JSON.stringify(locations));
+            return true;
+        }
+
+        function removeLocationFromStorage(name) {
+            let locations = getSavedLocations();
+            locations = locations.filter(loc => loc.name !== name);
+            localStorage.setItem('savedLocations', JSON.stringify(locations));
+        }
+
+        function isLocationSaved(name) {
+            const locations = getSavedLocations();
+            return locations.some(loc => loc.name === name);
+        }
+
+        function updateSaveButton() {
+            if (!currentLocation) return;
+            const btn = document.getElementById('saveLocationBtn');
+            const icon = document.getElementById('saveLocationIcon');
+
+            if (isLocationSaved(currentLocation.name)) {
+                btn.classList.add('bg-yellow-500/30', 'border-yellow-400', 'text-yellow-400');
+                btn.classList.remove('bg-white/10', 'border-white/20', 'text-white/50');
+                icon.className = 'ph-fill ph-star text-lg md:text-xl';
+                btn.title = 'Favorilerden Kaldır';
+            } else {
+                btn.classList.remove('bg-yellow-500/30', 'border-yellow-400', 'text-yellow-400');
+                btn.classList.add('bg-white/10', 'border-white/20', 'text-white/50');
+                icon.className = 'ph ph-star text-lg md:text-xl';
+                btn.title = 'Favorilere Ekle';
+            }
+        }
+
+        function toggleSaveLocation() {
+            if (!currentLocation) return;
+
+            if (isLocationSaved(currentLocation.name)) {
+                removeLocationFromStorage(currentLocation.name);
+            } else {
+                saveLocationToStorage(currentLocation);
+            }
+            updateSaveButton();
+            renderSavedLocationsList();
+        }
+
+        function toggleSavedLocations() {
+            const dropdown = document.getElementById('savedLocationsDropdown');
+            dropdown.classList.toggle('hidden');
+            renderSavedLocationsList();
+        }
+
+        function renderSavedLocationsList() {
+            const list = document.getElementById('savedLocationsList');
+            const noLocations = document.getElementById('noSavedLocations');
+            const locations = getSavedLocations();
+
+            list.innerHTML = '';
+
+            if (locations.length === 0) {
+                noLocations.classList.remove('hidden');
+                return;
+            }
+
+            noLocations.classList.add('hidden');
+
+            locations.forEach((loc, index) => {
+                const li = document.createElement('li');
+                li.className = 'px-4 py-3 hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0 transition-colors flex items-center justify-between group';
+
+                li.innerHTML = `
+                    <div class="flex items-center gap-3" onclick="loadSavedLocation(${index})">
+                        <i class="ph-fill ph-map-pin text-emerald-400"></i>
+                        <div>
+                            <span class="font-medium text-white block group-hover:text-emerald-300 transition-colors">${loc.name}</span>
+                            <span class="text-xs text-white/40">${loc.country || ''}</span>
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation(); removeSavedLocation('${loc.name}')" class="p-1.5 rounded-lg hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all">
+                        <i class="ph-bold ph-x text-sm"></i>
+                    </button>
+                `;
+
+                list.appendChild(li);
+            });
+        }
+
+        function loadSavedLocation(index) {
+            const locations = getSavedLocations();
+            const loc = locations[index];
+            if (loc) {
+                fetchWeather(loc.lat, loc.lon, loc.name, loc.country);
+                document.getElementById('savedLocationsDropdown').classList.add('hidden');
+            }
+        }
+
+        function removeSavedLocation(name) {
+            removeLocationFromStorage(name);
+            renderSavedLocationsList();
+            updateSaveButton();
+        }
+
+        // Dropdown dışına tıklanınca kapat
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('savedLocationsDropdown');
+            const btn = document.getElementById('savedLocationsBtn');
+            if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Kayıtlı yer varsa ilkini yükle, yoksa İstanbul
+            const savedLocations = getSavedLocations();
+            if (savedLocations.length > 0) {
+                const first = savedLocations[0];
+                fetchWeather(first.lat, first.lon, first.name, first.country);
+            } else {
+                fetchWeather(41.0138, 28.9497, "İstanbul", "Türkiye");
+            }
+        });
+
+    </script>
+</body>
+
+</html>
