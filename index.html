@@ -132,6 +132,32 @@
             border: none;
         }
 
+        .slider-pressure::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #a855f7, #c084fc);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+            transition: all 0.2s;
+        }
+
+        .slider-pressure::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.8);
+        }
+
+        .slider-pressure::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #a855f7, #c084fc);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
         /* Leaflet Harita Özelleştirme */
         .leaflet-container {
             background: #e8e8e8 !important;
@@ -477,6 +503,10 @@
                             class="px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-1.5">
                             <i class="ph-bold ph-drop"></i> Yağış
                         </button>
+                        <button onclick="setMapMode('pressure')" id="btnPressureMode"
+                            class="px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-1.5">
+                            <i class="ph-bold ph-gauge"></i> Basınç
+                        </button>
                     </div>
 
                     <!-- Sağ: Hız Bilgisi -->
@@ -533,8 +563,8 @@
                     <div
                         class="absolute top-2 right-2 md:top-3 md:right-3 bg-slate-900/90 backdrop-blur-md px-2 py-1.5 md:px-4 md:py-3 rounded-lg md:rounded-xl border border-white/20 shadow-xl z-[1000]">
                         <div class="flex items-center gap-2 md:gap-3">
-                            <div class="bg-emerald-500/20 p-1.5 md:p-2 rounded-md md:rounded-lg">
-                                <i class="ph-duotone ph-wind text-emerald-400 text-base md:text-xl"></i>
+                            <div id="mapInfoIconContainer" class="bg-emerald-500/20 p-1.5 md:p-2 rounded-md md:rounded-lg">
+                                <i id="mapInfoIcon" class="ph-duotone ph-wind text-emerald-400 text-base md:text-xl"></i>
                             </div>
                             <div>
                                 <p id="crosshairSpeed" class="text-sm md:text-xl font-bold text-white">-- km/s</p>
@@ -1038,7 +1068,7 @@
                 document.getElementById('windLoading').classList.remove('hidden');
 
                 try {
-                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,precipitation,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`;
+                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,precipitation,weather_code,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7`;
                     const res = await fetch(url);
                     const data = await res.json();
 
@@ -1050,12 +1080,13 @@
                         const direction = data.hourly.wind_direction_10m[targetHour] || 0;
                         const precip = data.hourly.precipitation[targetHour] || 0;
                         const wCode = data.hourly.weather_code[targetHour] || 0;
+                        const pressure = data.hourly.pressure_msl ? (data.hourly.pressure_msl[targetHour] || 1013) : 1013;
 
-                        updateWindUI(speed, direction, precip, wCode);
+                        updateWindUI(speed, direction, precip, wCode, pressure);
                     }
                 } catch (err) {
                     console.error('Rüzgar verisi alınamadı:', err);
-                    updateWindUI(0, 0, 0, 0);
+                    updateWindUI(0, 0, 0, 0, 1013);
                 } finally {
                     document.getElementById('windLoading').classList.add('hidden');
                 }
@@ -1065,94 +1096,133 @@
         let currentMapMode = 'wind';
         let currentPrecip = 0;
         let currentWeatherCode = 0;
+        let currentPressure = 1013;
 
-        function updateWindUI(speed, direction, precip = 0, wCode = 0) {
+        function updateWindUI(speed, direction, precip = 0, wCode = 0, pressure = 1013) {
             currentWindSpeed = speed;
             currentWindDirection = direction;
             currentPrecip = precip;
             currentWeatherCode = wCode;
+            currentPressure = pressure;
+
+            const icon = document.getElementById('mapInfoIcon');
+            const iconContainer = document.getElementById('mapInfoIconContainer');
+            const speedLabel = document.getElementById('windSpeedLabel');
 
             if (currentMapMode === 'wind') {
-                // Rüzgar Modu
                 document.getElementById('crosshairSpeed').textContent = `${Math.round(speed)} km/s`;
                 document.getElementById('crosshairDirection').textContent = `${Math.round(direction)}° ${getWindDirectionName(direction)}`;
-                document.getElementById('windSpeedLabel').textContent = `${Math.round(speed)} km/s`;
-
-                // Rüzgar animasyonunu güncelle
+                speedLabel.textContent = `${Math.round(speed)} km/s`;
+                speedLabel.className = 'text-[10px] md:text-xs px-2 md:px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full font-bold';
+                if (icon) {
+                    icon.className = 'ph-duotone ph-wind text-emerald-400 text-base md:text-xl';
+                    iconContainer.className = 'bg-emerald-500/20 p-1.5 md:p-2 rounded-md md:rounded-lg';
+                }
                 updateWindAnimation(speed, direction);
-            } else {
-                // Yağış Modu
+            } else if (currentMapMode === 'rain') {
                 document.getElementById('crosshairSpeed').textContent = `${precip} mm`;
-
                 let statusText = 'Yağışsız';
-                // Mevcut ikonu bul (wind, drop veya snowflake olabilir)
-                const icon = document.querySelector('#windMapSection i[class*="ph-"]');
-
                 if (icon) {
                     if (precip > 0) {
                         const isSnow = [71, 73, 75, 77, 85, 86].includes(wCode);
                         if (isSnow) {
                             statusText = 'Kar Yağışlı';
-                            icon.className = 'ph-duotone ph-snowflake text-white text-xl';
-                            icon.parentElement.className = 'bg-blue-500/20 p-2 rounded-lg';
+                            icon.className = 'ph-duotone ph-snowflake text-white text-base md:text-xl';
+                            iconContainer.className = 'bg-blue-500/20 p-1.5 md:p-2 rounded-md md:rounded-lg';
                         } else {
                             statusText = 'Yağmurlu';
-                            icon.className = 'ph-duotone ph-drop text-blue-400 text-xl';
-                            icon.parentElement.className = 'bg-blue-500/20 p-2 rounded-lg';
+                            icon.className = 'ph-duotone ph-drop text-blue-400 text-base md:text-xl';
+                            iconContainer.className = 'bg-blue-500/20 p-1.5 md:p-2 rounded-md md:rounded-lg';
                         }
                     } else {
                         statusText = 'Yağışsız';
-                        icon.className = 'ph-duotone ph-drop text-white/50 text-xl';
-                        icon.parentElement.className = 'bg-white/5 p-2 rounded-lg';
+                        icon.className = 'ph-duotone ph-drop text-white/50 text-base md:text-xl';
+                        iconContainer.className = 'bg-white/5 p-1.5 md:p-2 rounded-md md:rounded-lg';
                     }
                 }
-
                 document.getElementById('crosshairDirection').textContent = statusText;
-                document.getElementById('windSpeedLabel').textContent = `${precip} mm`;
-
+                speedLabel.textContent = `${precip} mm`;
+                speedLabel.className = 'text-[10px] md:text-xs px-2 md:px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full font-bold';
                 updateRainAnimation(precip);
+            } else if (currentMapMode === 'pressure') {
+                const pressureRounded = Math.round(pressure);
+                document.getElementById('crosshairSpeed').textContent = `${pressureRounded} hPa`;
+                speedLabel.textContent = `${pressureRounded} hPa`;
+
+                let pressureLabel, pressureTextColor, iconBgClass, labelColorClass;
+                if (pressure > 1022) {
+                    pressureLabel = '↑ Yüksek Basınç';
+                    pressureTextColor = 'text-blue-400';
+                    iconBgClass = 'bg-blue-500/20';
+                    labelColorClass = 'bg-blue-500/20 text-blue-300';
+                } else if (pressure < 1008) {
+                    pressureLabel = '↓ Düşük Basınç';
+                    pressureTextColor = 'text-red-400';
+                    iconBgClass = 'bg-red-500/20';
+                    labelColorClass = 'bg-red-500/20 text-red-300';
+                } else {
+                    pressureLabel = '↔ Normal';
+                    pressureTextColor = 'text-purple-400';
+                    iconBgClass = 'bg-purple-500/20';
+                    labelColorClass = 'bg-purple-500/20 text-purple-300';
+                }
+
+                document.getElementById('crosshairDirection').textContent = pressureLabel;
+                speedLabel.className = `text-[10px] md:text-xs px-2 md:px-3 py-1 ${labelColorClass} rounded-full font-bold`;
+                if (icon) {
+                    icon.className = `ph-duotone ph-gauge ${pressureTextColor} text-base md:text-xl`;
+                    iconContainer.className = `${iconBgClass} p-1.5 md:p-2 rounded-md md:rounded-lg`;
+                }
+                updatePressureAnimation(pressure);
             }
         }
 
         function setMapMode(mode) {
             currentMapMode = mode;
 
-            // Buton stilleri
             const btnWind = document.getElementById('btnWindMode');
             const btnRain = document.getElementById('btnRainMode');
+            const btnPressure = document.getElementById('btnPressureMode');
+            const slider = document.getElementById('windTimeSlider');
+            const inactiveClass = 'px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-1.5';
+
+            btnWind.className = inactiveClass;
+            btnRain.className = inactiveClass;
+            btnPressure.className = inactiveClass;
 
             if (mode === 'wind') {
-                btnWind.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shadow-lg transition-all flex items-center gap-2';
-                btnRain.className = 'px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-2';
-
-                // İkonları eski haline getir
-                const iconContainer = document.querySelector('#windMapSection .ph-wind, #windMapSection .ph-drop').parentElement;
-
-                // Yeniden veri ile güncelle (Animasyonu tetiklemek için)
-                fetchWindDataForCenter();
-            } else {
-                btnWind.className = 'px-3 py-1.5 rounded-lg text-xs font-medium text-white/50 hover:bg-white/5 hover:text-white transition-all flex items-center gap-2';
-                btnRain.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-500 text-white shadow-lg transition-all flex items-center gap-2';
-
-                fetchWindDataForCenter();
+                btnWind.className = 'px-2 md:px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shadow-lg transition-all flex items-center gap-1.5';
+                slider.className = 'w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-wind';
+            } else if (mode === 'rain') {
+                btnRain.className = 'px-2 md:px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-500 text-white shadow-lg transition-all flex items-center gap-1.5';
+                slider.className = 'w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-wind';
+            } else if (mode === 'pressure') {
+                btnPressure.className = 'px-2 md:px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-500 text-white shadow-lg transition-all flex items-center gap-1.5';
+                slider.className = 'w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider-pressure';
             }
+
+            fetchWindDataForCenter();
         }
 
-        // --- YAĞMUR ANİMASYONU ---
         function updateRainAnimation(precip) {
-            // Eğer rüzgar animasyonu çalışıyorsa durdurmuyoruz ama draw fonksiyonu içinde kontrol edeceğiz veya burada switch edeceğiz.
-            // En temizi: startWindAnimation içindeki döngüyü modifiye etmek.
-
-            // Canvas'ı temizle ve yeniden boyutlandır
             const canvas = document.getElementById('windCanvas');
             const container = document.getElementById('windMapContainer');
             canvas.width = container.offsetWidth;
             canvas.height = container.offsetHeight;
-
-            // Parçacıkları yağmur için ayarla
             if (windParticles.length === 0) {
                 initParticles(canvas.width, canvas.height);
-                startWindAnimation(); // Tek bir animasyon döngüsü kullanıyoruz
+                startWindAnimation();
+            }
+        }
+
+        function updatePressureAnimation(pressure) {
+            const canvas = document.getElementById('windCanvas');
+            const container = document.getElementById('windMapContainer');
+            canvas.width = container.offsetWidth;
+            canvas.height = container.offsetHeight;
+            if (windParticles.length === 0) {
+                initParticles(canvas.width, canvas.height);
+                startWindAnimation();
             }
         }
 
@@ -1265,10 +1335,7 @@
                             windParticles[index] = createParticle(canvas.width, canvas.height);
                         }
                     });
-                } else {
-                    // --- YAĞIŞ MODU ---
-                    // --- YAĞIŞ MODU (Gelişmiş) ---
-
+                } else if (currentMapMode === 'rain') {
                     if (currentPrecip <= 0) {
                         windAnimationId = requestAnimationFrame(animate);
                         return;
@@ -1277,41 +1344,33 @@
                     const isSnow = [71, 73, 75, 77, 85, 86].includes(currentWeatherCode);
 
                     if (isSnow) {
-                        // KAR MODU
                         const speed = 1 + (currentPrecip * 0.5);
-
-                        windParticles.forEach((p, index) => {
+                        windParticles.forEach((p) => {
                             p.y += speed;
                             p.x += Math.sin(p.age * 0.02) * 0.5;
                             p.age++;
-
                             if (p.y > canvas.height) {
                                 p.y = -5;
                                 p.x = Math.random() * canvas.width;
                             }
-
                             ctx.beginPath();
                             ctx.arc(p.x, p.y, Math.random() * 2 + 1, 0, Math.PI * 2);
                             ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
                             ctx.fill();
                         });
                     } else {
-                        // YAĞMUR MODU
                         const speed = Math.min(Math.max(10, currentPrecip * 8), 35);
                         const length = Math.min(Math.max(10, currentPrecip * 15), 50);
                         const color = { r: 147, g: 197, b: 253 };
-
-                        windParticles.forEach((p, index) => {
+                        windParticles.forEach((p) => {
                             p.y += speed;
                             if (p.y > canvas.height) {
                                 p.y = -length;
                                 p.x = Math.random() * canvas.width;
                             }
-
                             ctx.beginPath();
                             ctx.moveTo(p.x, p.y);
                             ctx.lineTo(p.x, p.y - length);
-
                             const alpha = Math.min(0.2 + (currentPrecip * 0.15), 0.8);
                             ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
                             ctx.lineWidth = currentPrecip > 5 ? 2 : 1.5;
@@ -1319,6 +1378,67 @@
                             ctx.stroke();
                         });
                     }
+                } else if (currentMapMode === 'pressure') {
+                    const cx = canvas.width / 2;
+                    const cy = canvas.height / 2;
+                    const t = Date.now() / 1000;
+
+                    let r, g, b, ringSpeed, orbitDirection;
+                    if (currentPressure > 1022) {
+                        r = 96; g = 165; b = 250;
+                        ringSpeed = 0.35;
+                        orbitDirection = -1;
+                    } else if (currentPressure < 1008) {
+                        r = 248; g = 113; b = 113;
+                        ringSpeed = 1.4;
+                        orbitDirection = 1;
+                    } else {
+                        r = 192; g = 132; b = 252;
+                        ringSpeed = 0.65;
+                        orbitDirection = 1;
+                    }
+
+                    const maxRadius = Math.min(canvas.width, canvas.height) * 0.42;
+
+                    for (let ring = 0; ring < 4; ring++) {
+                        const phase = (t * ringSpeed + ring * 0.25) % 1;
+                        const radius = phase * maxRadius;
+                        const alpha = (1 - phase) * 0.45;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.25)`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+                    ctx.fill();
+
+                    windParticles.forEach((p, index) => {
+                        const baseAngle = (index / PARTICLE_COUNT) * Math.PI * 2;
+                        const orbitRadius = 20 + (index % 8) * 18;
+                        const orbitSpeed = t * orbitDirection * (0.3 + (index % 3) * 0.1);
+                        const angle = baseAngle + orbitSpeed;
+
+                        p.x = cx + Math.cos(angle) * orbitRadius;
+                        p.y = cy + Math.sin(angle) * orbitRadius;
+
+                        const alphaVal = Math.max(0.05, 0.18 + (1 - orbitRadius / (20 + 7 * 18)) * 0.3);
+                        const size = Math.max(0.5, 1.5 - orbitRadius / (20 + 7 * 18));
+
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alphaVal})`;
+                        ctx.fill();
+                    });
                 }
 
                 windAnimationId = requestAnimationFrame(animate);
